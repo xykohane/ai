@@ -50,7 +50,8 @@ public class SecurityConfig {
             "/health",                 // 健康检查
             "/v3/api-docs/**",         // Swagger API 文档
             "/swagger-ui/**",          // Swagger UI
-            "/swagger-ui.html"
+            "/swagger-ui.html",
+            "/uploads/**"              // 上传的静态资源（视频文件）免认证访问
     };
 
     /**

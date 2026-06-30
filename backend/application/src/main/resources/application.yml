@@ -8,6 +8,20 @@ spring:
     username: aicompanion
     password: aicompanion
     driver-class-name: com.mysql.cj.jdbc.Driver
+  # 文件上传配置
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 500MB
+
+# 应用自定义配置
+app:
+  upload:
+    # 视频文件本地存储目录
+    video-dir: uploads/videos
+    # 视频文件访问路径前缀
+    access-prefix: /uploads/videos
 
 mybatis-plus:
   configuration:

@@ -40,7 +40,9 @@ struct Home {
       Column() {
         // 功能卡片
         Row() {
-          this.CardBuilder('在线学习', $r('app.media.startIcon'))
+          this.CardBuilder('在线学习', $r('app.media.startIcon'), () => {
+            router.pushUrl({ url: 'pages/OnlineLearningPage' })
+          })
           this.CardBuilder('职业规划', $r('app.media.startIcon'))
         }
         .margin({ bottom: 16 })

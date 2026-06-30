@@ -33,6 +33,10 @@
           <el-icon><Document /></el-icon>
           <template #title>学习记录</template>
         </el-menu-item>
+        <el-menu-item index="/video">
+          <el-icon><VideoCamera /></el-icon>
+          <template #title>视频管理</template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -67,7 +71,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAppStore } from '../../stores/app'
 import { useUserStore } from '../../stores/user'
-import { Odometer, User, Share, Document, Fold, Expand } from '@element-plus/icons-vue'
+import { Odometer, User, Share, Document, Fold, Expand, VideoCamera } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -8,6 +8,8 @@
     "pages/AiTutorPage",
     "pages/InterviewerPage",
     "pages/SkillTreePage",
-    "pages/DashboardPage"
+    "pages/DashboardPage",
+    "pages/OnlineLearningPage",
+    "pages/ModuleLearningPage"
   ]
 }

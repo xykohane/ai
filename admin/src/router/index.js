@@ -37,6 +37,12 @@ const routes = [
         name: 'Record',
         component: () => import('../views/record/index.vue'),
         meta: { title: '学习记录', requiresAuth: true }
+      },
+      {
+        path: 'video',
+        name: 'Video',
+        component: () => import('../views/video/index.vue'),
+        meta: { title: '视频管理', requiresAuth: true }
       }
     ]
   },
