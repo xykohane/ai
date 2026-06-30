@@ -50,7 +50,7 @@ public class LearningVideoController {
     @Operation(summary = "新增视频", description = "创建新的视频记录")
     @PostMapping
     public Result<Void> create(@Valid @RequestBody LearningVideo video) {
-        boolean success = learningVideoService.create(video);
+        boolean success = learningVideoService.createVideo(video);
         return success ? Result.success("创建成功", null) : Result.error("创建失败");
     }
 
@@ -60,7 +60,7 @@ public class LearningVideoController {
     @Operation(summary = "删除视频", description = "逻辑删除指定视频")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@Parameter(description = "视频ID") @PathVariable Long id) {
-        boolean success = learningVideoService.delete(id);
+        boolean success = learningVideoService.deleteVideo(id);
         return success ? Result.success("删除成功", null) : Result.error("删除失败");
     }
 
@@ -72,7 +72,7 @@ public class LearningVideoController {
     public Result<Void> update(
             @Parameter(description = "视频ID") @PathVariable Long id,
             @Valid @RequestBody LearningVideo video) {
-        boolean success = learningVideoService.update(id, video);
+        boolean success = learningVideoService.updateVideo(id, video);
         return success ? Result.success("更新成功", null) : Result.error("更新失败");
     }
 
@@ -82,7 +82,7 @@ public class LearningVideoController {
     @Operation(summary = "查询视频详情", description = "根据ID获取视频信息")
     @GetMapping("/{id}")
     public Result<LearningVideo> getById(@Parameter(description = "视频ID") @PathVariable Long id) {
-        LearningVideo video = learningVideoService.getById(id);
+        LearningVideo video = learningVideoService.getVideoById(id);
         return video == null ? Result.error("视频不存在") : Result.success(video);
     }
 
@@ -92,7 +92,7 @@ public class LearningVideoController {
     @Operation(summary = "查询全部视频", description = "获取所有视频列表")
     @GetMapping("/list")
     public Result<List<LearningVideo>> list() {
-        return Result.success(learningVideoService.list());
+        return Result.success(learningVideoService.listVideos());
     }
 
     /**
@@ -115,7 +115,7 @@ public class LearningVideoController {
             @Parameter(description = "每页大小") @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "模块（可选）") @RequestParam(required = false) String moduleName,
             @Parameter(description = "标题关键字（可选）") @RequestParam(required = false) String keyword) {
-        return Result.success(learningVideoService.page(page, size, moduleName, keyword));
+        return Result.success(learningVideoService.listVideosByPage(page, size, moduleName, keyword));
     }
 
     /**
@@ -139,17 +139,17 @@ public class LearningVideoController {
         String suffix = originalName.substring(originalName.lastIndexOf("."));
         String newFileName = UUID.randomUUID().toString().replace("-", "") + suffix;
 
-        // 确保目录存在
-        File dir = new File(videoDir);
+        // 确保目录存在（使用绝对路径，避免 transferTo 相对路径被解析到 Tomcat 临时目录）
+        File dir = new File(videoDir).getAbsoluteFile();
         if (!dir.exists() && !dir.mkdirs()) {
-            log.error("创建视频目录失败: {}", videoDir);
+            log.error("创建视频目录失败: {}", dir.getAbsolutePath());
             return Result.error("服务器存储目录创建失败");
         }
 
         // 保存文件
         try {
             File dest = new File(dir, newFileName);
-            file.transferTo(dest);
+            file.transferTo(dest.toPath());
             log.info("视频上传成功: {}", dest.getAbsolutePath());
 
             // 返回可访问的相对路径

@@ -38,6 +38,11 @@ public class LearningVideoServiceImpl implements LearningVideoService {
     }
 
     @Override
+    public List<LearningVideo> listVideos() {
+        return learningVideoMapper.selectList(null);
+    }
+
+    @Override
     public List<LearningVideo> listByModule(String moduleName) {
         LambdaQueryWrapper<LearningVideo> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(moduleName)) {
@@ -48,7 +53,7 @@ public class LearningVideoServiceImpl implements LearningVideoService {
     }
 
     @Override
-    public Page<LearningVideo> listByPage(int page, int size, String moduleName, String keyword) {
+    public Page<LearningVideo> listVideosByPage(int page, int size, String moduleName, String keyword) {
         Page<LearningVideo> pageParam = new Page<>(page, size);
         LambdaQueryWrapper<LearningVideo> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(moduleName)) {
