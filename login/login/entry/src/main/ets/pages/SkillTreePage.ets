@@ -166,9 +166,9 @@ struct SkillTreePage {
         // 难度星星
         Row() {
           ForEach([1, 2, 3, 4, 5], (star: number) => {
-            Text(star <= skill.difficulty ? '★' : '☆')
+            Text(star <= skill.level ? '★' : '☆')
               .fontSize(14)
-              .fontColor(star <= skill.difficulty ? '#E6A23C' : '#DDD')
+              .fontColor(star <= skill.level ? '#E6A23C' : '#DDD')
               .margin({ right: 2 })
           })
         }

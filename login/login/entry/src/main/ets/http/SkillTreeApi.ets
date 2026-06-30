@@ -8,7 +8,7 @@ export interface SkillTreeItem {
   id: number
   name: string
   category: string
-  difficulty: number
+  level: number
   description: string
   createTime?: string
 }
