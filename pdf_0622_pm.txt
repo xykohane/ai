@@ -1,0 +1,511 @@
+=== Page 1 ===
+0622-下午：ECharts 数据可视化与 Dashboard
+一、知识点
+ECharts 图表库基础用法（init → setOption → dispose）
+饼图（Pie Chart）实现技能分布展示
+Dashboard 仪表盘页面布局与实现
+技能树管理 CRUD 页面（el-tree + el-dialog + el-form）
+数据请求与图表渲染时机（nextTick）
+组件销毁时的资源清理（dispose + removeEventListener）
+二、内容
+1、ECharts 图表库
+ECharts 是百度开源的数据可视化库，支持柱状图、折线图、饼图、散点图、地图等几十种图表类型。在 Vue3 中使
+用 ECharts 的基本流程：
+安装 → 获取 DOM 容器 → 初始化图表实例 → 设置配置项 → 监听窗口变化 → 销毁时清理
+1.1 安装与引入
+npm install echarts
+<script setup>
+import * as echarts from 'echarts'
+</script>
+为什么用 import * as echarts？ ECharts 采用"按需引入"的打包方式，import * 会引入所有图表类型。
+生产环境可以用 echarts/core 按需引入减小包体积，开发阶段全量引入更方便。
+1.2 Dashboard 页面模板
+Dashboard（仪表盘）是后台管理系统的首页，展示关键统计数据和图表：
+<!-- views/dashboard/index.vue -->
+<template>
+<div class="dashboard">
+<!-- 第一行：统计卡片 -->
+<el-row :gutter="20" class="stat-cards">
+<el-col :span="6">
+<el-card shadow="hover">
+<template #header>用户总数</template>
+<div class="stat-value">{{ data?.totalUsers ?? '-' }}</div>
+</el-card>
+</el-col>
+
+=== Page 2 ===
+<el-col :span="6">
+<el-card shadow="hover">
+<template #header>技能数量</template>
+<div class="stat-value">{{ data?.totalSkills ?? '-' }}</div>
+</el-card>
+</el-col>
+<el-col :span="6">
+<el-card shadow="hover">
+<template #header>学习记录</template>
+<div class="stat-value">{{ data?.totalRecords ?? '-' }}</div>
+</el-card>
+</el-col>
+<el-col :span="6">
+<el-card shadow="hover">
+<template #header>AI调用次数</template>
+<div class="stat-value">{{ data?.aiCalls ?? '-' }}</div>
+</el-card>
+</el-col>
+</el-row>
+<!-- 第二行：图表 + 活动列表 -->
+<el-row :gutter="20" class="chart-row">
+<el-col :span="12">
+<el-card shadow="hover">
+<template #header>技能分布</template>
+<div ref="pieChartRef" class="chart-container"></div>
+</el-card>
+</el-col>
+<el-col :span="12">
+<el-card shadow="hover">
+<template #header>最近活动</template>
+<el-table :data="data?.recentActivities ?? []" stripe>
+<el-table-column prop="content" label="内容" />
+<el-table-column prop="time" label="时间" width="180" />
+</el-table>
+</el-card>
+</el-col>
+</el-row>
+</div>
+</template>
+页面布局结构：
+Dashboard
+├── Row（统计卡片行，4 列等宽）
+│ ├── Col:span=6 → 用户总数卡片
+│ ├── Col:span=6 → 技能数量卡片
+│ ├── Col:span=6 → 学习记录卡片
+│ └── Col:span=6 → AI调用次数卡片
+└── Row（图表行，2 列各半）
+├── Col:span=12 → 饼图（技能分布）
+└── Col:span=12 → 表格（最近活动）
+
+=== Page 3 ===
+组件/属性 作用
+el-row + el-col 栅格布局系统，总共 24 列
+:span="6" 占 6 列（即 1/4 宽度）
+:span="12" 占 12 列（即 1/2 宽度）
+:gutter="20" 列之间的间距（像素）
+shadow="hover" 卡片悬浮时显示阴影
+data?.totalUsers ?? '-' 可选链 + 空值合并，数据未加载时显示 -
+ref="pieChartRef" DOM 引用，用于 ECharts 初始化
+el-row 和 el-col： Element Plus 的栅格系统基于 CSS Flexbox 实现，总列数为 24。:span="6" 表示占 6/24
+= 25% 宽度，4 个 :span="6" 刚好一行。:gutter="20" 会在列之间添加 20px 的间距。
+1.3 饼图渲染逻辑
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import * as echarts from 'echarts'
+import { getDashboardData } from '../../api/dashboard'
+import type { DashboardData } from '../../types'
+const data = ref<DashboardData | null>(null)
+const pieChartRef = ref<HTMLElement>() // DOM 容器引用
+let pieChart: echarts.ECharts | null = null // ECharts 实例
+// 获取仪表盘数据
+async function fetchData() {
+const res = await getDashboardData()
+data.value = res.data
+// 等待 DOM 更新后再渲染图表
+await nextTick()
+renderPieChart()
+}
+// 渲染饼图
+function renderPieChart() {
+// 防御性检查：DOM 容器和数据都存在才渲染
+if (!pieChartRef.value || !data.value?.skillDistribution?.length) return
+// 1. 在 DOM 元素上初始化 ECharts 实例
+pieChart = echarts.init(pieChartRef.value)
+// 2. 设置图表配置项
+pieChart.setOption({
+tooltip: { trigger: 'item' },
+series: [{
+
+=== Page 4 ===
+type: 'pie',
+radius: '60%',
+data: data.value.skillDistribution,
+emphasis: {
+itemStyle: {
+shadowBlur: 10,
+shadowOffsetX: 0,
+shadowColor: 'rgba(0, 0, 0, 0.5)'
+}
+}
+}]
+})
+}
+// 窗口大小变化时重绘图表
+function handleResize() {
+pieChart?.resize()
+}
+onMounted(() => {
+fetchData()
+window.addEventListener('resize', handleResize)
+})
+onBeforeUnmount(() => {
+// 销毁图表实例，释放 Canvas 和内存
+pieChart?.dispose()
+// 移除事件监听，防止内存泄漏
+window.removeEventListener('resize', handleResize)
+})
+</script>
+ECharts 使用五步法：
+步骤 代码 说明
+1. 获取 DOM ref<HTMLElement>() 模板中用 ref="pieChartRef" 绑定
+2. 初始化 echarts.init(dom) 在 DOM 元素上创建图表实例
+3. 配置选项 chart.setOption({...}) 设置图表类型、数据、样式
+4. 响应式 addEventListener('resize', ...) 窗口大小变化时重绘
+5. 清理资源 chart.dispose() 组件销毁时释放内存
+nextTick 的重要性： data.value = res.data 更新数据后，Vue 不会立即更新 DOM，而是异步批量更
+新。await nextTick() 等待 DOM 更新完成，此时 pieChartRef.value 才能正确获取到 DOM 元素。如果
+不等 nextTick，pieChartRef.value 可能是 null，echarts.init(null) 会报错。
+
+=== Page 5 ===
+1.4 饼图配置项详解
+{
+tooltip: { trigger: 'item' }, // 鼠标悬浮在扇形上时显示提示框
+series: [{
+type: 'pie', // 图表类型：饼图
+radius: '60%', // 饼图半径（相对于容器）
+data: [ // 数据数组
+{ name: '前端', value: 35 },
+{ name: '后端', value: 28 },
+{ name: '数据库', value: 15 },
+{ name: '运维', value: 10 },
+{ name: '软技能', value: 12 }
+],
+emphasis: { // 高亮效果（鼠标悬浮时）
+itemStyle: {
+shadowBlur: 10, // 阴影模糊半径
+shadowColor: 'rgba(0,0,0,0.5)' // 阴影颜色
+}
+}
+}]
+}
+ECharts 的 Option 核心结构：
+字段 作用 常见配置
+title 图表标题 text、left、top
+tooltip 提示框 trigger: 'item'（饼图）/ 'axis'（柱状图）
+series 数据系列 type、data、radius 等
+不同图表类型的 series.type：
+图表类型 type 值 适用场景
+饼图 'pie' 占比分布
+柱状图 'bar' 数量对比
+折线图 'line' 趋势变化
+散点图 'scatter' 相关性分析
+
+=== Page 6 ===
+2、技能树管理页面
+技能树管理页面的核心新组件是 el-tree 树形组件。弹窗和表单部分（el-dialog、el-form、ElMessageBox）在
+Day08 已经学过，这里重点讲 el-tree 的用法。
+评论系统- Java - JavaSE -- 面向对象
+树表
+2.1 页面模板
+<!-- views/skill/index.vue -->
+<template>
+<div class="skill-page">
+<el-card shadow="hover">
+<template #header>
+<div class="card-header">
+<span>技能树管理</span>
+<div>
+<el-select v-model="filterCategory" placeholder="按分类筛选"
+clearable style="width: 160px; margin-right: 8px"
+@change="fetchTree">
+<el-option label="前端" value="FRONTEND" />
+<el-option label="后端" value="BACKEND" />
+<el-option label="数据库" value="DATABASE" />
+<el-option label="运维" value="DEVOPS" />
+<el-option label="软技能" value="SOFT_SKILLS" />
+</el-select>
+<el-button type="primary" @click="openDialog()">新增技能</el-button>
+</div>
+</div>
+</template>
+<!-- 树形结构展示 -->
+<el-tree
+:data="treeData"
+node-key="id"
+default-expand-all
+:expand-on-click-node="false"
+v-loading="loading"
+>
+<template #default="{ node, data }">
+<div class="tree-node">
+<span>{{ node.label }}</span>
+<span class="node-actions">
+<el-tag size="small" type="info" style="margin-right: 8px">
+{{ data.category }}
+</el-tag>
+<el-button size="small" @click.stop="openDialog(data)">编辑</el-button>
+<el-button size="small" type="danger" @click.stop="handleDelete(data)">删除
+</el-button>
+</span>
+</div>
+
+=== Page 7 ===
+</template>
+</el-tree>
+</el-card>
+<!-- 新增/编辑弹窗 -->
+<el-dialog v-model="dialogVisible" :title="editingSkill ? '编辑技能' : '新增技能'"
+width="500px">
+<el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+<el-form-item label="名称" prop="name">
+<el-input v-model="form.name" />
+</el-form-item>
+<el-form-item label="分类" prop="category">
+<el-select v-model="form.category" style="width: 100%">
+<el-option label="前端" value="FRONTEND" />
+<el-option label="后端" value="BACKEND" />
+<el-option label="数据库" value="DATABASE" />
+<el-option label="运维" value="DEVOPS" />
+<el-option label="软技能" value="SOFT_SKILLS" />
+</el-select>
+</el-form-item>
+<el-form-item label="描述" prop="description">
+<el-input v-model="form.description" type="textarea" :rows="3" />
+</el-form-item>
+<el-form-item label="父级ID" prop="parentId">
+<el-input-number v-model="form.parentId" :min="0" />
+</el-form-item>
+<el-form-item label="图标" prop="icon">
+<el-input v-model="form.icon" />
+</el-form-item>
+</el-form>
+<template #footer>
+<el-button @click="dialogVisible = false">取消</el-button>
+<el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-
+button>
+</template>
+</el-dialog>
+</div>
+</template>
+树形组件解读：
+组件/属性 作用
+el-tree 树形组件，自动根据数据的层级关系渲染树结构
+:data="treeData" 绑定树形数据（嵌套 children 结构）
+node-key="id" 指定节点的唯一标识字段
+default-expand-all 默认展开所有节点
+expand-on-click-node="false" 只有点击箭头才展开/折叠，点击节点文字不触发
+
+=== Page 8 ===
+组件/属性 作用
+#default="{ node, data }" 自定义节点渲染模板
+@click.stop 阻止事件冒泡，避免触发展开/折叠
+el-tree 的数据格式： 树形数据是嵌套结构，每个节点可以有 children 数组。例如：[{ id: 1, label:
+'前端', children: [{ id: 2, label: 'Vue' }, { id: 3, label: 'React' }] }]
+2.2 页面逻辑
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { getSkillTree, getSkillTreeByCategory, createSkill, updateSkill, deleteSkill } from
+'../../api/skill'
+import type { Skill } from '../../types'
+const treeData = ref<Skill[]>([])
+const loading = ref(false)
+const filterCategory = ref('')
+const dialogVisible = ref(false)
+const submitting = ref(false)
+const editingSkill = ref<Skill | null>(null)
+const formRef = ref<FormInstance>()
+// 表单数据
+const form = reactive({
+name: '',
+category: 'FRONTEND',
+description: '',
+parentId: 0,
+icon: ''
+})
+// 验证规则
+const rules: FormRules = {
+name: [{ required: true, message: '请输入技能名称', trigger: 'blur' }],
+category: [{ required: true, message: '请选择分类', trigger: 'change' }]
+}
+// 获取技能树
+async function fetchTree() {
+loading.value = true
+try {
+const res = filterCategory.value
+? await getSkillTreeByCategory(filterCategory.value)
+: await getSkillTree()
+treeData.value = res.data
+} finally {
+loading.value = false
+}
+
+=== Page 9 ===
+}
+// 打开新增/编辑弹窗
+function openDialog(skill?: Skill) {
+editingSkill.value = skill || null
+if (skill) {
+// 编辑模式：用已有数据填充表单
+Object.assign(form, {
+name: skill.name,
+category: skill.category,
+description: skill.description,
+parentId: skill.parentId,
+icon: skill.icon
+})
+} else {
+// 新增模式：清空表单
+Object.assign(form, {
+name: '', category: 'FRONTEND', description: '', parentId: 0, icon: ''
+})
+}
+dialogVisible.value = true
+}
+// 提交表单
+async function handleSubmit() {
+const valid = await formRef.value?.validate().catch(() => false)
+if (!valid) return
+submitting.value = true
+try {
+if (editingSkill.value) {
+// 编辑模式
+await updateSkill(editingSkill.value.id, form)
+ElMessage.success('更新成功')
+} else {
+// 新增模式
+await createSkill(form)
+ElMessage.success('创建成功')
+}
+dialogVisible.value = false
+fetchTree() // 刷新树形数据
+} catch {
+ElMessage.error('操作失败')
+} finally {
+submitting.value = false
+}
+}
+// 删除技能
+async function handleDelete(skill: Skill) {
+await ElMessageBox.confirm(`确定删除技能 "${skill.name}" 吗？`, '提示', { type: 'warning' })
+try {
+await deleteSkill(skill.id)
+
+=== Page 10 ===
+ElMessage.success('删除成功')
+fetchTree()
+} catch {
+ElMessage.error('删除失败')
+}
+}
+onMounted(fetchTree)
+</script>
+CRUD 操作流程：
+操作 流程
+点击"新增技能" → openDialog() → 填写表单 → handleSubmit() → createSkill() →
+Create
+fetchTree()
+页面加载 → onMounted → fetchTree() → getSkillTree() → treeData.value =
+Read
+res.data
+点击"编辑" → openDialog(data) → 修改表单 → handleSubmit() → updateSkill() →
+Update
+fetchTree()
+Delete 点击"删除" → ElMessageBox.confirm 确认 → deleteSkill() → fetchTree()
+删除确认的作用： ElMessageBox.confirm 会弹出一个确认对话框。用户点"确定"继续执行后续代码，点"取
+消"抛出异常被 catch 捕获（什么都不做）。这样可以防止用户误删数据。
+2.3 Object.assign 填充表单
+Day08 回顾： reactive() 创建的对象不能直接重新赋值（form = { ... } 会断开 Proxy 包装），必须用
+Object.assign 逐个修改属性。这个坑在 Day08 的 Composition API 部分已经讲过，这里再次出现是因为技
+能树编辑功能需要"回填数据到表单"。
+// 编辑模式：将技能数据复制到表单中
+Object.assign(form, {
+name: skill.name,
+category: skill.category,
+description: skill.description,
+parentId: skill.parentId,
+icon: skill.icon
+})
+为什么不直接 form = { ... } ？ reactive() 创建的对象不能直接重新赋值，否则会丢失响应性（Proxy
+包装会断开）。必须用 Object.assign 逐个修改属性，或者改用 ref 包装后修改 .value。
+
+=== Page 11 ===
+3、图表与数据的配合
+Dashboard 页面的完整数据流：
+onMounted
+│
+▼
+fetchData()
+│ → getDashboardData() → GET /api/dashboard
+│ → data.value = res.data（包含统计数据 + 图表数据）
+│
+▼
+await nextTick()
+│ → 等待 Vue DOM 更新完成
+│ → 此时 pieChartRef.value 已经是真实的 DOM 元素
+│
+▼
+renderPieChart()
+│ → echarts.init(pieChartRef.value) ← 在 DOM 上初始化图表
+│ → chart.setOption({
+│ series: [{ data: data.value.skillDistribution }]
+│ })
+│
+▼
+图表显示在页面上
+后端返回的 skillDistribution 数据格式：
+{
+"totalUsers": 1280,
+"totalSkills": 156,
+"totalRecords": 3840,
+"aiCalls": 5620,
+"skillDistribution": [
+{ "name": "前端", "value": 35 },
+{ "name": "后端", "value": 28 },
+{ "name": "数据库", "value": 15 },
+{ "name": "运维", "value": 10 },
+{ "name": "软技能", "value": 12 }
+],
+"recentActivities": [
+{ "content": "用户张三完成了Vue3学习", "time": "2025-05-28 14:30" },
+{ "content": "新增技能：TypeScript", "time": "2025-05-28 13:15" }
+]
+}
+ECharts 饼图会根据 value 自动计算每个扇形的角度比例：前端 35%、后端 28%、数据库 15%……
+
+=== Page 12 ===
+4、资源清理
+Dashboard 组件销毁时必须清理 ECharts 实例和事件监听：
+onBeforeUnmount(() => {
+pieChart?.dispose() // 销毁图表实例
+window.removeEventListener('resize', handleResize) // 移除事件监听
+})
+清理操作 原因
+chart.dispose() 释放 ECharts 占用的内存和 Canvas 资源
+removeEventListener 防止已销毁组件的回调函数被触发（内存泄漏）
+和 HarmonyOS 的对比： Vue 的 onBeforeUnmount ≈ HarmonyOS 的 aboutToDisappear。两者都需要在
+组件销毁时清理定时器、事件监听等资源，否则会造成内存泄漏。这是所有 UI 框架的通用最佳实践。
+5、Vue3 开发模式总结
+Vue3 后台管理系统的完整开发模式：
+开发流程：
+1. views/ 下创建页面组件（.vue 文件）
+2. api/ 下封装后端接口调用
+3. stores/ 下管理全局状态
+4. router/index.js 注册路由
+页面结构：
+<template> → HTML 模板（Element Plus 组件）
+<script setup> → 业务逻辑（Composition API）
+<style scoped> → 样式（scoped 限定作用域，不污染其他组件）
+数据流：
+用户操作 → 调用 API → Axios 拦截器注入 Token
+→ 后端处理 → 响应拦截器解包
+→ 更新 State（Pinia / ref）
+→ UI 自动更新（Vue 响应式系统）
+scoped 样式： <style scoped> 中的样式只对当前组件生效，不会影响其他组件。Vue 在编译时会给当前组
+件的 DOM 元素添加唯一的 data-v-xxx 属性，CSS 选择器也会加上对应的属性选择器，实现样式隔离。
+三、课后练习
+1. 为 Dashboard 添加一个柱状图，展示近 7 天的每日 AI 调用次数。提示：使用 echarts 的 type: 'bar'，X
+轴为日期，Y 轴为调用次数（先用Mock数据）。
+2. 使用 ECharts 的折线图（type: 'line'），展示用户增长趋势数据（近 30 天每天的新增用户数）（先用
+Mock数据）。
+
+=== Page 13 ===
+3. 完善技能树管理页面，确保"按分类筛选"功能正常工作【选择不同分类时重新请求并展示对应的技能树数
+据】。（先用Mock数据）

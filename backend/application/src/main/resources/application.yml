@@ -1,0 +1,56 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    # Docker MySQL连接配置
+    url: jdbc:mysql://localhost:3306/aicompanion?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: aicompanion
+    password: aicompanion
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    # 驼峰命名转换
+    map-underscore-to-camel-case: true
+    # 日志输出
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      # 主键策略：自增
+      id-type: auto
+      # 逻辑删除字段
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  # Mapper XML 文件位置
+  mapper-locations: classpath:mapper/*.xml
+
+# Dify AI 配置
+dify:
+  # Dify API 地址（部署地址）
+  base-url: http://localhost/v1
+  # 请求超时（秒）
+  timeout: 120
+  # AI伴学助手配置
+  tutor:
+    api-key: app-4LrB63xNTKO7m2JDzYqX0AI2
+  # AI面试官配置
+  interviewer:
+    api-key: app-0G519ZXObOaDRuJzY8OEvJYO
+
+# JWT 配置
+jwt:
+  # 密钥（HS256 要求至少 32 字节）
+  secret: aicompanion-secret-key-for-jwt-token-generation-2024-very-long
+  # Token 有效期（毫秒）：86400000 = 24小时
+  expiration: 86400000
+
+# SpringDoc OpenAPI 配置
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha

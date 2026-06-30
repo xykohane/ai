@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: aicompanion-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: aicompanion
+      MYSQL_USER: aicompanion
+      MYSQL_PASSWORD: aicompanion
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      # 数据持久化
+      - mysql_data:/var/lib/mysql
+      # 初始化SQL脚本（可选）
+      - ./src/main/resources/sql:/docker-entrypoint-initdb.d
+      # MySQL配置文件（可选）
+      - ./mysql/conf:/etc/mysql/conf.d
+      # 日志文件（可选）
+      - ./mysql/logs:/var/log/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    networks:
+      - aicompanion-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  aicompanion-network:
+    driver: bridge

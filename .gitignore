@@ -1,0 +1,34 @@
+# Node modules
+node_modules/
+
+# Build outputs
+login/login/entry/build/
+login/login/.hvigor/
+login/login/.idea/
+login/login/local.properties
+login/login/oh-package-lock.json5
+login/login/entry/oh-package-lock.json5
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Compiled
+*.class
+*.jar
+*.war
+*.ear
+target/
+
+# Logs
+*.log
+
+# Env
+.env.local
+.env.*.local

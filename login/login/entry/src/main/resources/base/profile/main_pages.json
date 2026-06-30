@@ -1,0 +1,13 @@
+{
+  "src": [
+    "pages/Login",
+    "pages/Register",
+    "pages/Home",
+    "pages/PersonalCenter",
+    "pages/AiChatPage",
+    "pages/AiTutorPage",
+    "pages/InterviewerPage",
+    "pages/SkillTreePage",
+    "pages/DashboardPage"
+  ]
+}

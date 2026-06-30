@@ -1,0 +1,340 @@
+=== Page 1 ===
+0622-上午：Pinia 状态管理与 Axios 封装
+一、知识点
+Pinia 状态管理（defineStore、State、Getters、Actions）
+用户状态管理（useUserStore）完整实现
+Token 工具函数封装
+Axios 实例创建与配置
+请求拦截器（Token 自动注入）
+响应拦截器（统一解包 + 错误处理）
+完整数据流：登录 → Token 存储 → 请求注入 → 用户信息获取
+二、内容
+1、Pinia 状态管理
+Pinia 是 Vue3 官方推荐的状态管理库，用于管理跨组件共享的状态。在我们的项目中，"当前登录用户信息"需要在
+AppLayout、Dashboard、User 等多个页面中使用，这就是典型的共享状态场景。
+1.1 为什么需要状态管理
+Day08 中我们用 localStorage 存 Token，但存在几个问题：
+问题 localStorage 的局限 Pinia 的解决方案
+用户信息存在哪？ 只存了 token 字符串，没有用户详情 Store 中存完整的 user 对象
+多页面共享？ 每个页面都要 getItem 读取 任何组件直接 useUserStore().user
+登录状态判断？ localStorage.getItem('token') userStore.isLoggedIn（computed）
+退出登录？ 手动 removeItem 多个 key userStore.logout() 一行搞定
+Pinia 的核心思想： 把需要共享的状态放在一个"全局仓库"（Store）中。任何组件都可以直接读写这个仓库，
+不需要通过 props 层层传递。
+npm install pinia
+1.2 用户状态 Store
+// stores/user.js
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { getCurrentUser } from '../api/user'
+import { login as loginApi } from '../api/auth'
+
+=== Page 2 ===
+import { setToken, removeToken, getToken } from '../utils/token'
+export const useUserStore = defineStore('user', () => {
+// ---- State（状态）----
+const user = ref(null) // 当前用户信息对象
+const token = ref(getToken()) // JWT Token（从 localStorage 恢复）
+// ---- Getters（计算属性）----
+const isLoggedIn = computed(() => !!token.value)
+const isAdmin = computed(() => user.value?.role === 'admin')
+// ---- Actions（操作方法）----
+async function login(data) {
+// 1. 调用后端登录接口
+const res = await loginApi(data)
+// 2. 保存 Token
+token.value = res.data.token
+setToken(res.data.token)
+// 3. 获取用户详细信息
+await fetchUserInfo()
+}
+async function fetchUserInfo() {
+const res = await getCurrentUser()
+user.value = res.data
+}
+function logout() {
+user.value = null
+token.value = null
+removeToken()
+}
+// 返回所有需要暴露的状态和方法
+return { user, token, isLoggedIn, isAdmin, login, fetchUserInfo, logout }
+})
+逐层解读：
+部分 Pinia 概念 对应 Vue 组件 示例
+ref(null) State（状态） 类似组件的 data user、token
+Getters（计算属 isLoggedIn、
+computed(...) 类似组件的 computed
+性） isAdmin
+function
+Actions（操作） 类似组件的 methods login、logout
+login(...)
+类似组件的 template 中可
+return { ... } 导出供组件使用 —
+用
+
+=== Page 3 ===
+Composition API 风格： defineStore('user', () => { ... }) 使用函数式写法，和 Vue3 组件的
+<script setup> 风格一致。另一种选项式写法（defineStore('user', { state, getters, actions
+})）也可以，但函数式更灵活、更推荐。
+1.3 在组件中使用 Store
+<script setup>
+import { useUserStore } from '../../stores/user'
+const userStore = useUserStore()
+// 读取 state
+console.log(userStore.user) // 用户信息或 null
+console.log(userStore.token) // Token 字符串
+// 读取 getter
+console.log(userStore.isLoggedIn) // true / false
+console.log(userStore.isAdmin) // true / false
+// 调用 action
+await userStore.login({ username: 'admin', password: '123456' })
+userStore.logout()
+</script>
+操作 代码 说明
+读取 state userStore.user 直接访问，不需要 .value
+读取 getter userStore.isLoggedIn 计算属性，自动缓存
+调用 action userStore.login(data) 异步方法，返回 Promise
+修改 state userStore.user = null 直接赋值，Pinia 自动追踪变化
+Pinia vs ref 的区别： 在组件模板中直接用 {{ userStore.user }}，在 <script setup> 中也直接用
+userStore.user（不是 userStore.user.value）。Pinia 内部对 state 做了自动解包处理。
+1.4 登录流程中的 Store 交互
+组件调用 userStore.login(form)
+│
+▼
+loginApi(form) → POST /api/auth/login
+│ 后端返回 { token, userId, username }
+▼
+token.value = res.data.token → 更新 Pinia state（运行时）
+setToken(res.data.token) → 保存到 localStorage（持久化）
+│
+▼
+fetchUserInfo() → GET /api/users/me
+│ Axios 拦截器自动注入 Token
+│ 后端返回用户详细信息
+
+=== Page 4 ===
+▼
+user.value = res.data → 更新 Pinia state
+│
+▼
+组件中 userStore.isLoggedIn → true（computed 自动计算）
+组件中 userStore.user → 用户信息对象
+Token 双重存储的原因： Pinia 中存一份（运行时使用，读取快），localStorage 中存一份（持久化，刷新页
+面后不丢失）。页面刷新时 Pinia 的 state 会清空，但 ref(getToken()) 会从 localStorage 恢复 Token。
+2、Token 工具函数
+Day08 中我们直接在登录页写 localStorage.setItem('token', ...)，现在把它封装为独立工具函数，方便统一
+管理：
+// utils/token.js
+const TOKEN_KEY = 'ai_companion_token'
+export function getToken() {
+return localStorage.getItem(TOKEN_KEY)
+}
+export function setToken(token) {
+localStorage.setItem(TOKEN_KEY, token)
+}
+export function removeToken() {
+localStorage.removeItem(TOKEN_KEY)
+}
+为什么单独封装？ 如果直接在各处用 localStorage.getItem('ai_companion_token')，key 字符串散布在
+多个文件中。一旦需要改 key 名称，要改很多地方。封装后 key 集中管理在一处，改一处即可。这是"常量提
+取"的基本编码规范。
+3、Axios 封装
+// Ajax \ Jquery \ XHR
+// Fetch
+// Promise() 函数、JS（ES6 * 2015） HttpClient
+npm install axios
+Day08 中用户管理用的是本地 Mock 数组，没有真正的网络请求。今天我们引入 Axios 做 HTTP 请求封装，实现：
+Token 自动注入：每个请求自动带上 Authorization: Bearer xxx
+统一错误处理：401 自动跳转登录页，500 弹出错误提示
+API 模块化：不同业务的接口分文件管理
+
+=== Page 5 ===
+3.1 创建 Axios 实例
+// api/request.js
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
+import { getToken } from '../utils/token'
+const service = axios.create({
+baseURL: import.meta.env.VITE_API_BASE_URL, // 从环境变量读取
+timeout: 15000, // 请求超时 15 秒
+headers: { 'Content-Type': 'application/json' },
+})
+配置项 含义
+baseURL API 基地址，所有请求自动拼接前缀
+timeout 请求超时时间，超过 15 秒自动取消
+headers 默认请求头
+环境变量： import.meta.env.VITE_API_BASE_URL 从 .env.development 文件读取。开发环境设为
+http://localhost:8080，生产环境设为实际域名。Vite 约定只有 VITE_ 开头的环境变量才会暴露给前端代
+码。
+3.2 请求拦截器：Token 自动注入
+// ---- 请求拦截器：自动注入 Bearer Token ----
+service.interceptors.request.use(
+(config) => {
+const token = getToken()
+if (token && config.headers) {
+config.headers.Authorization = `Bearer ${token}`
+}
+return config
+},
+(error) => Promise.reject(error),
+)
+请求拦截器的工作流程：
+
+=== Page 6 ===
+组件调用 getUserList()
+│
+▼
+Axios 请求拦截器拦截
+│ → 从 localStorage 读取 Token
+│ → 设置 config.headers.Authorization = "Bearer xxx"
+│
+▼
+发送请求 GET /api/users
+Headers: {
+Authorization: "Bearer xxx",
+Content-Type: "application/json"
+}
+拦截器的好处： 如果没有拦截器，每个 API 调用都要手动加 Token：request.get('/api/users', {
+headers: { Authorization: 'Bearer ' + token } })。有了拦截器，所有请求自动携带 Token，业务代
+码完全不需要关心认证细节。
+3.3 响应拦截器：统一解包与错误处理
+// ---- 响应拦截器：解包 ApiResponse，统一处理错误 ----
+service.interceptors.response.use(
+(response) => {
+const res = response.data
+// 不是标准 ApiResponse 格式，直接返回
+if (res.code === undefined) {
+return response
+}
+// 成功：解包返回 data 字段
+if (res.code === 200 || res.code === 0) {
+return res.data
+}
+// 业务错误（code 非 200）
+ElMessage.error(res.message || '请求失败')
+return Promise.reject(new Error(res.message || '请求失败'))
+},
+(error) => {
+const status = error.response?.status
+if (status === 401) {
+// Token 过期或无效
+ElMessage.error('登录已过期，请重新登录')
+localStorage.removeItem('ai_companion_token')
+window.location.href = '/login'
+} else if (status === 403) {
+// 没有权限
+ElMessage.error('没有权限访问该资源')
+} else if (status === 500) {
+// 服务器错误
+
+=== Page 7 ===
+ElMessage.error('服务器内部错误，请稍后再试')
+} else {
+// 其他错误
+ElMessage.error(error.response?.data?.message || error.message || '网络错误')
+}
+return Promise.reject(error)
+},
+)
+响应拦截器做了三件事：
+情况 处理方式
+成功（code 200 或 0） 解包 res.data，调用方直接拿到业务数据
+业务错误（code 非 200） 弹出错误提示，reject 错误让调用方 catch
+HTTP 错误（401/403/500） 弹出对应提示，401 自动清除 Token 并跳转登录页
+解包的好处： 后端统一返回 { code: 200, message: "ok", data: { ... } } 格式。拦截器解包后，调用
+方直接拿到 data，不用每次都写 res.data.data。这和 HarmonyOS 中 HttpClient 的拦截器思路完全一
+致。
+401 为什么用 window.location.href 而不是 router.push？ 因为 router 实例不在 request.js 中。用
+window.location.href 会刷新整个页面，确保所有状态（包括 Pinia store）都被彻底重置，避免残留的脏数
+据。
+3.4 导出 Axios 实例
+export default service
+其他 API 文件通过 import request from './request' 引入这个封装好的实例，所有请求自动享受 Token 注入和
+错误处理。
+4、API 模块化
+不同业务的 API 分别封装在独立文件中：
+// api/auth.js - 认证相关
+import request from './request'
+export function login(data) {
+return request.post('/api/auth/login', data)
+}
+export function register(data) {
+return request.post('/api/auth/register', data)
+}
+
+=== Page 8 ===
+// api/user.js - 用户管理
+import request from './request'
+export function getCurrentUser() {
+return request.get('/api/users/me')
+}
+export function getUserList(params) {
+return request.get('/api/users', { params })
+}
+export function updateUserRole(id, role) {
+return request.put(`/api/users/${id}/role`, { role })
+}
+// api/skill.js - 技能树管理
+import request from './request'
+export function getSkillTree() {
+return request.get('/api/skills/tree')
+}
+export function createSkill(data) {
+return request.post('/api/skills', data)
+}
+export function updateSkill(id, data) {
+return request.put(`/api/skills/${id}`, data)
+}
+export function deleteSkill(id) {
+return request.delete(`/api/skills/${id}`)
+}
+模块化的好处： 每个 API 文件只包含一类业务的接口，文件小、职责单一。后端接口路径变了，只需要改对应
+的 API 文件，不影响页面代码。这是"单一职责原则"的体现。
+5、完整数据流：登录 → 首页
+把 Pinia、Axios、Router 串起来，看一次完整的登录流程：
+1. 用户在 login/index.vue 输入用户名密码，点击"登录"
+│
+▼
+2. 调用 userStore.login(form)
+│ → loginApi(form) → POST /api/auth/login
+│ → Axios 请求拦截器：此时还没有 Token，不注入
+│ → 后端验证成功，返回 { token: "xxx", userId: 1, username: "admin" }
+│
+▼
+3. userStore 保存 Token
+
+=== Page 9 ===
+│ → token.value = "xxx"（Pinia state，运行时使用）
+│ → setToken("xxx")（localStorage，持久化存储）
+│
+▼
+4. userStore.fetchUserInfo()
+│ → getCurrentUser() → GET /api/users/me
+│ → Axios 请求拦截器：此时已有 Token，自动注入 ✅
+│ → 后端返回用户详细信息 { id, username, nickname, role, avatar }
+│ → user.value = 用户信息对象
+│
+▼
+5. router.push('/dashboard')
+│ → 路由守卫 beforeEach 检查 Token → 存在，通过 ✅
+│ → AppLayout 组件渲染
+│ → Dashboard 子路由渲染
+│
+▼
+6. 用户刷新页面（F5）
+│ → Pinia state 清空（内存中的数据丢失）
+│ → token = getToken()（从 localStorage 恢复 Token）
+│ → AppLayout 的 onMounted 检测到"已登录但没有用户信息"
+│ → 自动调用 fetchUserInfo() 恢复用户信息
+│ → 页面恢复正常显示
+为什么登录成功后还要调 fetchUserInfo()？ 因为登录接口只返回 Token 和基本信息（userId、
+username），不返回完整的用户信息（角色、头像、昵称等）。需要拿着 Token 再请求一次 /api/users/me
+获取完整数据。
+三、课后练习
+1. 改造登录页： 将 Day08 登录页中的 localStorage.setItem('token', ...) 替换为
+userStore.login(form)，路由守卫改为从 Pinia 读取 Token。
+2. 改造用户管理页面： 将 Mock 数组中的数据展示逻辑改为调用 getUserList(params) API 函数（Mock 数据
+可保留在 API 层兜底）。
+3. 在 Axios 响应拦截器中，添加对 401（授权认证失败）状态码的处理，弹出"授权认证失败，请重新登录"的提
+示。
